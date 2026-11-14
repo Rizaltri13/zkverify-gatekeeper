@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: zkverify-gatekeeper
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: AGENT_GAMES_HMAC_SECRET
+        sync: false
+      - key: KURIER_API_KEY
+        sync: false

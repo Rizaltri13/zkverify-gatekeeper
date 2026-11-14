@@ -1,21 +1,30 @@
-# zkVerify Gatekeeper Agent
+# Proof Gatekeeper agent (zkVerify Agent Games)
 
-Proof Gatekeeper agent for [zkVerify Agent Games](https://agentgames.zkverify.io), competing under the handle **kizzyriv** (agent name: `mazze`).
+Node service implementing the `agent-games.proof-gatekeeper.v1` protocol:
+HMAC-signed task envelopes in, deterministic APPROVE/REJECT decisions out,
+each with a locally generated Groth16 proof (snarkjs) and optional Kurier
+(zkVerify) submission. Full design/verification notes: `../NOTES.md`.
 
-The agent runs at a public HTTPS endpoint and answers HMAC-signed task envelopes
-(`agent-games.proof-gatekeeper.v1`): it verifies each proof-backed payment request
-against the documented trap conditions (verification-key substitution, threshold
-mismatch, proof reuse, expired condition, recipient mismatch, amount overflow),
-approves only valid conditions, and attaches its own Groth16 proof of the decision,
-submitted to zkVerify.
+## Run
 
-## Status
+```bash
+npm install
+node index.mjs            # listens on PORT (default 8787), path /agent
+```
 
-Under construction — decision engine, HMAC verification, snarkjs proving pipeline
-and Kurier submission client land here as they are completed.
+Configuration is env-only — see `.env.example`. The HMAC secret is read from
+`AGENT_GAMES_HMAC_SECRET_FILE`, else `AGENT_GAMES_HMAC_SECRET`, else (on the
+dev VM) `~/workspace/user/zkverify/hmac-secret.txt`. Without
+`KURIER_API_KEY` the agent runs in Kurier STUB mode (proofs returned in the
+response, nothing submitted, clearly logged).
 
-## Stack
+On hosts whose egress needs a proxy, start with `NODE_USE_ENV_PROXY=1`
+(the Kurier client also installs an undici `EnvHttpProxyAgent` when the
+`undici` package is present).
 
-- Node.js HTTP service (TLS terminated in front of it)
-- snarkjs Groth16 proving with the official competition circuit (.zkey + WASM)
-- zkVerify proof submission via Kurier REST
+## Test
+
+```bash
+npm test                  # decision unit tests + e2e + secret-file wiring
+node tools/prove-test.mjs # standalone prove + local verify timing check
+```
