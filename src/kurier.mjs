@@ -55,7 +55,22 @@ export class KurierClient {
     if (!res.ok) {
       throw new Error(`Kurier submit failed: HTTP ${res.status} ${JSON.stringify(job).slice(0, 200)}`);
     }
-    log("info", "kurier.submitted", { jobId: job.jobId || job.id || null, status: job.status || "Submitted" });
+    log("info", "kurier.submitted", {
+      jobId: job.jobId || job.id || null,
+      status: job.status || "Submitted",
+      optimisticVerify: job.optimisticVerify ?? null,
+    });
+    // Per the Kurier docs, the submit response's optimisticVerify field is
+    // the fast verification verdict: anything other than "success" means the
+    // proof failed verification — surface it immediately instead of letting
+    // it emerge later as an opaque Failed job.
+    if (typeof job.optimisticVerify === "string" && job.optimisticVerify !== "success") {
+      log("error", "kurier.optimistic_verify_failed", {
+        jobId: job.jobId || job.id || null,
+        optimisticVerify: job.optimisticVerify,
+        message: "Kurier optimistic verification did not succeed — proof verification failed, check artifacts",
+      });
+    }
     return job;
   }
 
@@ -73,18 +88,36 @@ export class KurierClient {
     try {
       const job = await this.submitProof(proof, publicSignals);
       const jobId = job.jobId || job.id;
+      // Docs treat optimisticVerify !== "success" as a failed verification
+      // and stop — don't poll a job that is already known to be bad.
+      if (typeof job.optimisticVerify === "string" && job.optimisticVerify !== "success") {
+        return { ...job, jobId, status: job.status || "Submitted" };
+      }
       if (!jobId || !waitMs || waitMs <= 0) return { ...job, status: job.status || "Submitted" };
       const deadline = Date.now() + waitMs;
       let status = job.status || "Submitted";
+      let last = job;
       while (Date.now() < deadline) {
         if (/final/i.test(status)) break;
-        await new Promise((r) => setTimeout(r, 3000));
+        // "Failed" is a terminal job status (docs) — stop polling at once
+        // and surface it as a failure, not as a wait timeout.
+        if (/fail/i.test(status)) {
+          log("error", "kurier.job_failed", { jobId, status });
+          return { ...last, jobId, status, failed: true };
+        }
+        // Poll interval per the Kurier docs' example (5s).
+        await new Promise((r) => setTimeout(r, 5000));
         const s = await this.jobStatus(jobId);
+        last = s;
         status = s.status || s.jobStatus || status;
         if (/final/i.test(status)) {
           log("info", "kurier.finalized", { jobId, status, txHash: s.txHash || s.proofTx || null });
           return { ...s, jobId, status };
         }
+      }
+      if (/fail/i.test(status)) {
+        log("error", "kurier.job_failed", { jobId, status });
+        return { ...last, jobId, status, failed: true };
       }
       log("warn", "kurier.wait_timeout", { jobId, status });
       return { jobId, status };

@@ -94,11 +94,17 @@ async function handleTask(envelope) {
       response.public_signals = publicSignals;
       log("info", "task.proved", { task_id: taskId, ms: Date.now() - started });
       // Kurier submission (confirmation/audit). Bounded wait; failures logged,
-      // never block or fail the response.
-      const remaining = Math.max(0, config.softDeadlineMs - (Date.now() - started));
-      const waitMs = Math.min(config.kurierWaitMs, remaining);
-      const job = await kurier.submitAndWait(proof, publicSignals, waitMs);
-      if (job && !job.stub && !job.error) response.kurier_job_id = job.jobId || job.id || null;
+      // never block or fail the response — and isolated in its own try/catch
+      // so a Kurier error can never strip the proof from the response (the
+      // platform re-verifies the inline proof; Kurier is audit trail only).
+      try {
+        const remaining = Math.max(0, config.softDeadlineMs - (Date.now() - started));
+        const waitMs = Math.min(config.kurierWaitMs, remaining);
+        const job = await kurier.submitAndWait(proof, publicSignals, waitMs);
+        if (job && !job.stub && !job.error) response.kurier_job_id = job.jobId || job.id || null;
+      } catch (ke) {
+        log("error", "task.kurier_failed", { task_id: taskId, error: String(ke.message || ke) });
+      }
     } catch (e) {
       // Fail closed on the decision, open about the missing proof: a timely
       // decision without a proof scores better than a timeout.

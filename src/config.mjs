@@ -47,7 +47,7 @@ export const config = {
     "0x6b79c6012a6d8651f3e13bc4d2a20370280ab49700c90c5316d4168bfbad77b0",
   kurierWaitMs: Number(process.env.KURIER_WAIT_MS ?? 25000),
   seenStorePath: path.resolve(ROOT, process.env.SEEN_STORE_PATH || "./data/seen.json"),
-  taskIdEncoding: process.env.TASKID_ENCODING || "fnv",
+  taskIdEncoding: process.env.TASKID_ENCODING || "sha256",
   logLevel: process.env.LOG_LEVEL || "info",
   wasmPath: path.join(ROOT, "circuits", "gatekeeper.wasm"),
   zkeyPath: path.join(ROOT, "circuits", "gatekeeper_final.zkey"),
