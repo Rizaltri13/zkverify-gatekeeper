@@ -17,6 +17,16 @@ let dispatcherReady = false;
 async function ensureDispatcher() {
   if (dispatcherReady) return;
   dispatcherReady = true;
+  // The proxy dispatcher is a Node-on-this-VM concern only:
+  // - Under Deno (Deno Deploy) there is no env-proxy requirement and the
+  //   runtime's global fetch must be left untouched (the npm undici build
+  //   is not Deno-compatible), so never attempt the import there.
+  // - Without any proxy env var there is nothing to configure.
+  // Any failure is non-fatal: log and continue with the global fetch.
+  if (typeof globalThis.Deno !== "undefined") return;
+  const hasProxyEnv = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"]
+    .some((k) => process.env[k]);
+  if (!hasProxyEnv) return;
   try {
     const { EnvHttpProxyAgent, setGlobalDispatcher } = await import("undici");
     setGlobalDispatcher(new EnvHttpProxyAgent());

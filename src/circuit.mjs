@@ -77,7 +77,19 @@ export function buildCircuitInput(envelope, decision, encoding = "fnv") {
   };
 }
 
-export async function prove(circuitInput, { wasmPath, zkeyPath }) {
+export async function prove(circuitInput, { wasmPath, zkeyPath, singleThread = false }) {
+  if (singleThread) {
+    // ffjavascript's multithreaded curve builder goes through the
+    // `web-worker` polyfill (node:worker_threads), which is broken under
+    // Deno / Deno Deploy — the fullProve promise never settles. Passing
+    // proverOptions { singleThread: true } makes ffjavascript skip the
+    // thread manager entirely. Single-thread proving measures ~0.5s,
+    // far inside the 60s deadline (see ~/workspace/zkverify/DENO.md).
+    const { proof, publicSignals } = await snarkjs.groth16.fullProve(
+      circuitInput, wasmPath, zkeyPath, null, null, { singleThread: true }
+    );
+    return { proof, publicSignals };
+  }
   const { proof, publicSignals } = await snarkjs.groth16.fullProve(circuitInput, wasmPath, zkeyPath);
   return { proof, publicSignals };
 }

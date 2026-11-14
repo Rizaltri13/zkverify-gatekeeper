@@ -86,7 +86,7 @@ async function handleTask(envelope) {
     try {
       const circuitInput = buildCircuitInput(envelope, outcome.decision, config.taskIdEncoding);
       const { proof, publicSignals } = await withTimeout(
-        prove(circuitInput, { wasmPath: config.wasmPath, zkeyPath: config.zkeyPath }),
+        prove(circuitInput, { wasmPath: config.wasmPath, zkeyPath: config.zkeyPath, singleThread: config.proverSingleThread }),
         config.softDeadlineMs,
         "groth16 prove"
       );
